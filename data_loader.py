@@ -1,7 +1,7 @@
 import pandas as pd
 
 # Load dataset
-df = pd.read_csv("Artworks.csv")
+df = pd.read_csv("https://media.githubusercontent.com/media/Imanmh369/week-3-collection/refs/heads/main/Artworks.csv")
 
 # Clean up Gender
 df["Gender"] = df["Gender"].str.lower().str.replace(r"[^a-z]", "", regex=True)
