@@ -92,7 +92,9 @@ def extract_palette(url, n=5):
 classifications = df["Classification"].dropna().unique()
 
 layout = html.Div([
-    html.H2("Encyclopedia Timeline"),
+    html.H2("Encyclopedia Timeline", style={"margin-top": "80px"}),
+
+    # Search dropdowns
     html.Div([
         dcc.Dropdown(
             options=[{"label": c, "value": c} for c in classifications],
@@ -105,8 +107,9 @@ layout = html.Div([
             placeholder="Select an artist",
             style={"width": "45%", "display": "inline-block"}
         )
-    ]),
-    # Medium Bar at top-right corner
+    ], style={"margin-top": "20px"}),
+
+    # Medium Bar (anchored to right corner under search bar)
     html.Div([
         html.Div(id="medium-gradient", style={
             "width": "200px",
@@ -129,13 +132,17 @@ layout = html.Div([
         })
     ], style={
         "position": "absolute",
-        "top": "70px",
-        "right": "40px",
+        "top": "160px",   # just below dropdowns
+        "right": "40px",  # right side corner
         "width": "200px",
-        "text-align": "center"
+        "text-align": "center",
+        "z-index": "10"
     }),
-    html.Div(id="timeline-container")
-])
+
+    # Timeline
+    html.Div(id="timeline-container", style={"margin-top": "220px"})
+], style={"position": "relative"})
+
 
 def register_callbacks(app):
     @app.callback(
