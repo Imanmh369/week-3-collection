@@ -1,11 +1,14 @@
-from dash import dcc, html, Input, Output
+from dash import dcc, html, Input, Output, State
+import dash_cytoscape as cyto
 import pandas as pd
 from data_loader import df
 from PIL import Image
 import requests
 from io import BytesIO
 
-# Normalize mediums into categories
+# -------------------------
+# Medium normalization map
+# -------------------------
 medium_map = {
     "oil on canvas": "Painting",
     "oil painting": "Painting",
@@ -64,10 +67,6 @@ def build_gradient(counts):
 
 # Improved palette extraction using Pillow adaptive quantization
 def extract_palette(url, n=5):
-    """
-    Fetch image from URL and return up to n dominant colors as CSS rgb(...) strings.
-    Returns a list like ['rgb(12,34,56)', ...]. On failure returns ['#ccc'].
-    """
     try:
         resp = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
         resp.raise_for_status()
@@ -88,7 +87,9 @@ def extract_palette(url, n=5):
         print("Palette extraction failed for", url, ":", e)
         return ["#ccc"]
 
+# -------------------------
 # Layout
+# -------------------------
 classifications = df["Classification"].dropna().unique()
 
 layout = html.Div([
@@ -109,7 +110,7 @@ layout = html.Div([
         )
     ], style={"margin-top": "20px"}),
 
-    # Medium Bar (anchored to right corner under search bar)
+    # Medium Bar
     html.Div([
         html.Div(id="medium-gradient", style={
             "width": "200px",
@@ -132,18 +133,28 @@ layout = html.Div([
         })
     ], style={
         "position": "absolute",
-        "top": "160px",   # just below dropdowns
-        "right": "40px",  # right side corner
+        "top": "160px",
+        "right": "40px",
         "width": "200px",
         "text-align": "center",
         "z-index": "10"
     }),
+
+    # Networking button + output
+    html.Div([
+        html.Button("Check artist classifications", id="check-class-btn", n_clicks=0),
+        html.Div(id="artist-class-output", style={"margin-top": "10px"}),
+        html.Div(id="artist-network-container", style={"margin-top": "20px"})
+    ], style={"margin-top": "20px"}),
 
     # Timeline
     html.Div(id="timeline-container", style={"margin-top": "220px"})
 ], style={"position": "relative"})
 
 
+# -------------------------
+# Callbacks
+# -------------------------
 def register_callbacks(app):
     @app.callback(
         Output("artist-dropdown", "options"),
@@ -184,21 +195,114 @@ def register_callbacks(app):
             else:
                 base_style["background"] = category_colors["Unknown"]
 
-        def style_item(text, category):
-            if dominant == category:
-                return html.Span(text, style={"margin-right": "10px", "font-weight": "bold", "color": "#000"})
-            return html.Span(text, style={"margin-right": "10px"})
+        # Legend with emoji icons
+        legend_items = [
+            html.Span("🟡 Painting", style={"margin-right": "10px", "font-weight": "bold" if dominant == "Painting" else "normal"}),
+            html.Span("⚫ Drawing", style={"margin-right": "10px", "font-weight": "bold" if dominant == "Drawing" else "normal"}),
+            html.Span("🟢 Graphite", style={"margin-right": "10px", "font-weight": "bold" if dominant == "Graphite" else "normal"}),
+            html.Span("🟤 Sculpture", style={"margin-right": "10px", "font-weight": "bold" if dominant == "Sculpture" else "normal"}),
+            html.Span("🔵 Digital", style={"margin-right": "10px", "font-weight": "bold" if dominant == "Digital" else "normal"}),
+            html.Span("🟣 Mixed Media", style={"margin-right": "10px", "font-weight": "bold" if dominant == "Mixed Media" else "normal"}),
+            html.Span("🌸 Other", style={"margin-right": "10px", "font-weight": "bold" if dominant == "Other" else "normal"})
+        ]
+        
+        return base_style, html.Div(legend_items, style={
+                "text-align": "center",
+                "font-size": "12px",
+                "display": "flex",
+                "flex-wrap": "wrap",
+                "justify-content": "center",
+                "gap": "8px",
+                "margin-top": "6px"
+            })
 
-        legend = html.Div([
-            style_item("🟡 Painting", "Painting"),
-            style_item("⚫ Drawing", "Drawing"),
-            style_item("🟢 Graphite", "Graphite"),
-            style_item("🟤 Sculpture", "Sculpture"),
-            style_item("🔵 Digital", "Digital"),
-            style_item("🟣 Mixed Media", "Mixed Media"),
-            style_item("🌸 Other", "Other")
-        ])
-        return base_style, legend
+    @app.callback(
+        [Output("artist-class-output", "children"),
+         Output("artist-network-container", "children")],
+        Input("check-class-btn", "n_clicks"),
+        State("artist-dropdown", "value")
+    )
+    def check_artist_classes(n_clicks, artist):
+        if n_clicks == 0 or not artist:
+            return "", ""
+        
+         # Toggle logic: odd clicks show, even clicks hide
+        if n_clicks % 2 == 0:
+            return "", ""   # hide everything on even clicks
+
+        classes = df[df["Artist"] == artist]["Classification"].dropna().unique()
+        if len(classes) > 1:
+            text_output = f"{artist} is involved in multiple classifications: {', '.join(classes)}"
+            elements = [{"data": {"id": artist, "label": artist}, "classes": "artist"}]
+            for c in classes:
+                elements.append({"data": {"id": c, "label": c}, "classes": "classification"})
+                elements.append({"data": {"source": artist, "target": c}})
+            network_graph = cyto.Cytoscape(
+                id="artist-network",
+                layout={"name": "cose", "animate": True},
+                style={"width": "100%", "height": "500px", "background-color": "#f9f9f9"},
+                elements=elements,
+                stylesheet=[
+                    {"selector": ".artist", "style": {
+                        "background-color": "#0074D9",
+                        "shape": "ellipse",
+                        "width": "70px",
+                        "height": "70px",
+                        "label": "data(label)",
+                        "font-size": "18px",
+                        "color": "#000",
+                        "text-valign": "center",
+                        "text-halign": "center",
+                        "border-width": 3,
+                        "border-color": "#005fa3",
+                        "shadow-blur": 10,
+                        "shadow-color": "rgba(0,0,0,0.2)"
+                    }},
+
+                    # Classification node style
+                    {"selector": ".classification", "style": {
+                        "background-color": "#FF4136",
+                        "shape": "round-rectangle",
+                        "width": "80px",
+                        "height": "50px",
+                        "label": "data(label)",
+                        "font-size": "16px",
+                        "color": "#000",
+                        "text-valign": "center",
+                        "text-halign": "center",
+                        "border-width": 2,
+                        "border-color": "#cc342b",
+                        "shadow-blur": 8,
+                        "shadow-color": "rgba(0,0,0,0.2)"
+                    }},
+
+                    # Edge style
+                    {"selector": "edge", "style": {
+                        "width": 5,
+                        "line-color": "#aaa",
+                        "curve-style": "bezier",
+                        "opacity": 0.8
+                    }},
+                    # Hover/selected style
+                    {"selector": ":selected", "style": {
+                        "border-color": "#FFD700",
+                        "border-width": 4,
+                        "shadow-blur": 15,
+                        "shadow-color": "rgba(255,215,0,0.6)"
+                    }}
+                ]
+            )
+
+                        
+            return text_output, network_graph
+
+        elif len(classes) == 1:
+            text_output = f"{artist} is only involved in {classes[0]}"
+            return text_output, ""
+
+        else:
+            text_output = f"No classification data found for {artist}"
+            return text_output, ""
 
     @app.callback(
         Output("timeline-container", "children"),
@@ -226,7 +330,6 @@ def register_callbacks(app):
 
             if "ImageURL" in row and pd.notna(row["ImageURL"]) and str(row["ImageURL"]).startswith("http"):
                 image_component = html.Img(src=row["ImageURL"], style={"width": "200px", "margin-top": "5px"})
-                # Only add palette for Painting classification
                 if isinstance(selected_classification, str) and selected_classification.lower() == "painting":
                     palette = extract_palette(row["ImageURL"], n=5)
                     swatches = []
