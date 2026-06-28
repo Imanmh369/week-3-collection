@@ -13,17 +13,33 @@ app = dash.Dash(
 
 server = app.server
 
-# Navbar
+# Navbar (just brand now)
 navbar = dbc.NavbarSimple(
     brand="Art Encyclopedia",
     brand_href="/",
     color="dark",
-    dark=True,
-    children=[
-        dbc.NavItem(dbc.NavLink("Encyclopedia Timeline", href="/encyclopedia")),
-        dbc.NavItem(dbc.NavLink("Demographic", href="/demographic")),
-    ]
+    dark=True
 )
+
+# Welcome page layout with buttons
+welcome_layout = html.Div([
+    html.H2("Welcome", style={"textAlign": "center", "marginTop": "40px"}),
+    html.P("Choose a section to explore:", style={"textAlign": "center"}),
+
+    html.Div([
+        html.Button("Encyclopedia Timeline", id="encyclopedia-btn", n_clicks=0,
+                    style={"margin": "10px", "padding": "12px 24px", "fontSize": "16px",
+                           "backgroundColor": "#0074D9", "color": "white", "border": "none",
+                           "borderRadius": "6px", "cursor": "pointer",
+                           "transition": "all 0.3s ease"}),
+
+        html.Button("Demographic", id="demographic-btn", n_clicks=0,
+                    style={"margin": "10px", "padding": "12px 24px", "fontSize": "16px",
+                           "backgroundColor": "#2ECC40", "color": "white", "border": "none",
+                           "borderRadius": "6px", "cursor": "pointer",
+                           "transition": "all 0.3s ease"})
+    ], style={"textAlign": "center", "marginTop": "20px"})
+])
 
 # Layout
 app.layout = dbc.Container([
@@ -40,10 +56,20 @@ def display_page(pathname):
     elif pathname == "/demographic":
         return demographic.layout
     else:
-        return html.Div([
-            html.H2("Welcome"),
-            html.P("Choose a section above to explore.")
-        ])
+        return welcome_layout
+
+# Button navigation
+@app.callback(
+    Output("url", "pathname"),
+    [Input("encyclopedia-btn", "n_clicks"),
+     Input("demographic-btn", "n_clicks")]
+)
+def navigate_to_page(ency_clicks, demo_clicks):
+    if ency_clicks > 0:
+        return "/encyclopedia"
+    elif demo_clicks > 0:
+        return "/demographic"
+    return "/"
 
 # Register callbacks from both pages
 encyclopedia.register_callbacks(app)
@@ -51,4 +77,3 @@ demographic.register_callbacks(app)
 
 if __name__ == "__main__":
     app.run(debug=True)
-
