@@ -39,6 +39,19 @@ def normalize_medium(medium):
     m = medium.strip().lower()
     return medium_map.get(m, "Other")
 
+
+def get_emoji(category):
+    emoji_map = {
+        "Painting": "🟡",
+        "Drawing": "⚫",
+        "Graphite": "🟢",
+        "Sculpture": "🟤",
+        "Digital": "🔵",
+        "Mixed Media": "🟣",
+        "Other": "🌸"
+    }
+    return emoji_map.get(category, "")
+
 # Distinct colors per category
 category_colors = {
     "Painting": "#b58900",
@@ -160,6 +173,8 @@ def register_callbacks(app):
         Output("artist-dropdown", "options"),
         Input("classification-dropdown", "value")
     )
+
+
     def update_artists(selected_classification):
         if not selected_classification:
             return []
@@ -181,6 +196,7 @@ def register_callbacks(app):
             "box-shadow": "0 0 6px rgba(0,0,0,0.1)"
         }
         dominant = None
+        percentages = {}
         if not clicked_artist or not selected_classification:
             base_style["background"] = category_colors["Unknown"]
         else:
@@ -190,21 +206,40 @@ def register_callbacks(app):
             if not artist_data.empty:
                 counts = artist_data["Medium"].value_counts()
                 dominant = counts.idxmax()
-                gradient = build_gradient(counts)
+                total = counts.sum()
+                percentages = {cat: round((count / total) * 100, 1) for cat, count in counts.items()}
+                stops = []
+                current = 0
+                for category, count in counts.items():
+                    color = category_colors.get(category, "#999999")
+                    start = int((current / total) * 100)
+                    end = int(((current + count) / total) * 100)
+                    if end == start:
+                        end = min(start + 1, 100)
+                    stops.append(f"{color} {start}%")
+                    stops.append(f"{color} {end}%")
+                    current += count
+                gradient = "linear-gradient(to right, " + ", ".join(stops) + ")"
                 base_style["background"] = gradient
             else:
                 base_style["background"] = category_colors["Unknown"]
 
         # Legend with emoji icons
-        legend_items = [
-            html.Span("🟡 Painting", style={"margin-right": "10px", "font-weight": "bold" if dominant == "Painting" else "normal"}),
-            html.Span("⚫ Drawing", style={"margin-right": "10px", "font-weight": "bold" if dominant == "Drawing" else "normal"}),
-            html.Span("🟢 Graphite", style={"margin-right": "10px", "font-weight": "bold" if dominant == "Graphite" else "normal"}),
-            html.Span("🟤 Sculpture", style={"margin-right": "10px", "font-weight": "bold" if dominant == "Sculpture" else "normal"}),
-            html.Span("🔵 Digital", style={"margin-right": "10px", "font-weight": "bold" if dominant == "Digital" else "normal"}),
-            html.Span("🟣 Mixed Media", style={"margin-right": "10px", "font-weight": "bold" if dominant == "Mixed Media" else "normal"}),
-            html.Span("🌸 Other", style={"margin-right": "10px", "font-weight": "bold" if dominant == "Other" else "normal"})
-        ]
+        legend_items = []
+        for category, color in category_colors.items():
+            if category in percentages:
+                pct = percentages[category]
+                legend_items.append(
+                    html.Span(
+                        f"{get_emoji(category)} {category} ({pct}%)",
+                        style={
+                            "marginRight": "10px",
+                            "fontWeight": "bold" if (dominant == category or pct < 10) else "normal",
+                            "color": color
+                        }
+                    )
+                )
+
         
         return base_style, html.Div(legend_items, style={
                 "text-align": "center",
@@ -212,8 +247,10 @@ def register_callbacks(app):
                 "display": "flex",
                 "flex-wrap": "wrap",
                 "justify-content": "center",
-                "gap": "8px",
-                "margin-top": "6px"
+                "align-items": "center",
+                "gap": "12px",
+                "margin-top": "10px",
+                "flex-direction": "row"
             })
 
     @app.callback(
@@ -390,3 +427,4 @@ def register_callbacks(app):
         })
 
         return timeline
+
