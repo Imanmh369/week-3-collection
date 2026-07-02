@@ -1,6 +1,6 @@
 from dash import dcc, html, Output, Input
 import plotly.express as px
-import dash_table
+from dash import dash_table
 import pandas as pd
 from data_loader import artist_df, df
 import re
