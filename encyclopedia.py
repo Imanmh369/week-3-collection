@@ -157,7 +157,17 @@ layout = html.Div([
     html.Div([
         html.Button("Check artist classifications", id="check-class-btn", n_clicks=0),
         html.Div(id="artist-class-output", style={"margin-top": "10px"}),
-        html.Div(id="artist-network-container", style={"margin-top": "20px"})
+        html.Div(id="artist-network-container", style={"margin-top": "20px"}),
+        
+        html.H2(id="artist-header", style={
+            "text-align": "left",
+            "margin-left": "20px",
+            "margin-top": "20px",
+            "font-weight": "bold",
+            "color": "#222",
+            "font-size": "22px"
+        }
+                )
     ], style={"margin-top": "20px"}),
 
     # Timeline
@@ -342,13 +352,14 @@ def register_callbacks(app):
             return text_output, ""
 
     @app.callback(
-        Output("timeline-container", "children"),
+        [Output("timeline-container", "children"),
+        Output("artist-header", "children")],
         [Input("artist-dropdown", "value"),
          Input("classification-dropdown", "value")]
     )
     def show_timeline(clicked_artist, selected_classification):
         if not clicked_artist or not selected_classification:
-            return html.Div("Select classification and artist to view timeline.")
+            return html.Div("Select classification and artist to view timeline."), ""
 
         artist_data = df[(df["Artist"] == clicked_artist) &
                          (df["Classification"] == selected_classification)].copy()
@@ -357,7 +368,8 @@ def register_callbacks(app):
         artist_data = artist_data.sort_values("Date")
 
         if artist_data.empty:
-            return html.Div("No works found for this artist in that classification.")
+            return html.Div("No works found for this artist in that classification."), f"Timeline of {clicked_artist}"
+        
 
         items = []
         for i, (_, row) in enumerate(artist_data.head(20).iterrows()):
@@ -370,22 +382,66 @@ def register_callbacks(app):
                 if isinstance(selected_classification, str) and selected_classification.lower() == "painting":
                     palette = extract_palette(row["ImageURL"], n=5)
                     swatches = []
-                    for c in palette:
+                    for j,c in enumerate(palette):
                         swatches.append(html.Div(
-                            title=str(c),
+                            title=f"{c} (click to copy)",
                             style={
                                 "background": c,
                                 "width": "40px",
                                 "height": "20px",
                                 "display": "inline-block",
                                 "margin-right": "2px",
-                                "border": "1px solid rgba(0,0,0,0.08)"
-                            }
+                                "border": "1px solid rgba(0,0,0,0.08)",
+                                "cursor": "pointer",
+                                "position": "relative"
+                            }, 
+                            id=f"color-{i}-{j}-{c.replace('#','')}", 
+                            n_clicks=0,
+                            children=[
+                                html.Span(
+                                    f"{c}",
+                                    style={
+                                        "visibility": "hidden",
+                                        "background-color": "#333",
+                                        "color": "#fff",
+                                        "text-align": "center",
+                                        "border-radius": "4px",
+                                        "padding": "2px 6px",
+                                        "position": "absolute",
+                                        "z-index": "10",
+                                        "bottom": "125%",
+                                        "left": "50%",
+                                        "transform": "translateX(-50%)",
+                                        "white-space": "nowrap",
+                                        "font-size": "11px"
+
+                                    },
+                                    className="tooltip-text"
+                                )
+                            ]
                         ))
                     palette_div = html.Div(swatches, style={"margin-top": "5px", "display": "inline-block"})
 
+            date_value = row.get('Date', '')
+            if pd.isna(date_value) or str(date_value).lower() == 'nan' or date_value == '':
+                date_display = html.Span("Date unknown", style={
+                    "font-style": "italic",
+                    "color": "#777"
+                })
+
+            else:
+                date_display = html.Span(str(int(date_value)) if isinstance(date_value, (int, float)) else str(date_value), style={
+                    "font-weight": "bold",
+                    "color": "#000"
+    
+                })
+
             entry_children = [
-                html.H4(f"{row.get('Date', '')} — {row.get('Title', '')}"),
+                html.H4([
+                    date_display,
+                    html.Span(f" — {row.get('Title', '')}", style={"font-weight": "bold"})
+
+                ]),
                 html.P(f"Medium: {row.get('Medium', '')}"),
                 html.P(f"Classification: {row.get('Classification', '')}"),
                 html.P(f"Nationality: {row.get('Nationality', '')}"),
@@ -395,9 +451,36 @@ def register_callbacks(app):
             if palette_div:
                 entry_children.append(palette_div)
 
+            connector_line = html.Div([
+            html.Div(style={
+                "position": "absolute",
+                "top": "25px",
+                "width": "80px",
+                "height": "3px",
+                "background-color": "black",
+                "box-shadow": "0 0 2px rgba(0,0,0,0.3)",
+                "left": "calc(50% - 80px)" if side == "left" else "50%",
+                "right": "auto" if side == "left" else "calc(50% - 70px)",
+                "z-index": "0"
+            }),
+
+            html.Div(style={
+                "position": "absolute",
+                "top": "21px",
+                "width": "12px",
+                "height": "12px",
+                "border-radius": "50%",
+                "background-color": "black",
+                "left": "calc(50% - 80px)" if side == "left" else "calc(50% + 80px)",
+                "z-index": "1"
+            })
+
+            ])
+
             items.append(html.Div([
+                connector_line,
                 html.Div(entry_children, style={
-                    "width": "45%",
+                    "width": "40%",
                     "text-align": "left" if side == "left" else "right",
                     "float": side,
                     "margin-bottom": "30px",
@@ -426,5 +509,5 @@ def register_callbacks(app):
             "overflow": "hidden"
         })
 
-        return timeline
+        return timeline, f"Timeline of {clicked_artist}"
 
